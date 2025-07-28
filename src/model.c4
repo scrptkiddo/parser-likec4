@@ -1,188 +1,826 @@
+specification {
+  element person {
+    notation "External Actor"
+    style {
+      shape person
+      color muted
+    }
+  }
+  element external {
+    notation "External System"
+    style {
+      shape rectangle
+      color muted
+    }
+  }
+  element system {
+    notation "System"
+    style {
+      shape rectangle
+      opacity 20%
+    }
+  }
+  element container {
+    notation "Container"
+    style {
+      shape rectangle
+    }
+  }
+  element component {
+    notation "Component"
+    style {
+      shape rectangle
+      opacity 30%
+    }
+  }
+  element layer {
+    notation "Architectural Layer"
+    style {
+      shape rectangle
+      border dashed
+      opacity 30%
+    }
+  }
+  element worker {
+    notation "Worker/Service"
+    style {
+      shape rectangle
+      opacity 40%
+    }
+  }
+}
+
 model {
-
-  customer = actor 'Customer' {
-    -> boutique.frontend 'browses and buys products' {
-      navigateTo place-order
-      link https://github.com/likec4/template 'Repository'
-    }
-    -> boutique.frontend.catalogue 'browses products'
-    -> boutique.frontend.checkout 'buys products' {
-      navigateTo place-order
-      link https://github.com/likec4/template/issues 'Issues'
-    }
-    -> boutique.frontend.profile 'manages account and reviews history'
+  // External Actors
+  botUser = person "Bot User" {
+    description "Users interacting with the bot via Telegram commands"
   }
-  customer -> boutique 'uses'
 
-  boutique = system 'Online Boutique System' {
+  // External Systems
+  telegramPlatform = external "Telegram Platform" {
+    description "External Telegram messaging platform and API"
+    technology "Telegram API"
+  }
 
-    link https://github.com/likec4/template 'Repository'
-    link ./model.c4#L18 'Model'
+  sourceChannels = external "Source Channels" {
+    description "Monitored job posting channels (cyithr, cyprusithr, relocation_vacancies)"
+    technology "Telegram Channels"
+  }
 
-    description '
-      E-commerce app for browsing items, add them to the cart,
-      and purchasing them.
-    '
+  targetChat = external "Target Chat" {
+    description "Destination chat where filtered job posts are forwarded"
+    technology "Telegram Chat"
+  }
 
-    email = service 'Email Service' {
-      description 'Sends emails to customers using templates and customer data.'
+  // Main System with Layers for drill-down
+  jobMonitoringBot = system "Job Monitoring Bot" {
+    description "Telegram bot that monitors job channels and forwards relevant posts"
+    technology "Python, Telethon, python-telegram-bot"
 
-      -> email-provider 'delegates email sending'
-    }
+    // === LAYERS ===
+    applicationLayer = layer "Application Layer" {
+      description "Entry point and orchestration logic"
 
-    checkout = service 'Checkout Service' {
-      #teamB
-      icon tech:nodejs    
-      description 'Retrieves user cart, prepares order and orchestrates the payment, shipping and the email notification.'
-      link https://github.com/likec4/template 'Repository'
-      metadata {
-        npm '@boutique/checkout'
-        version: '1.0.0'
-      }
+      mainApp = container "Main Application" {
+        description "Entry point and orchestrator"
+        technology "Python, asyncio"
 
-      -> payments.processor 'sends payment request' {
-        navigateTo place-order
-      }
-      -> shipping 'sends checkout data' {
-        navigateTo order-fulfillment
-      }      
-      -> email 'sends order confirmation'
-      -> actionLog 'sends activity data' #v2 #next
-    }
+        mainModule = component "main.py" {
+          description "Application entry point"
 
-    cart = service 'Cart Service' {
-      #teamA
-      icon tech:nodejs
-      description "Stores the items in the user's shopping cart in Redis and retrieves it."
-
-      api = component 'Cart API' {
-        #v1, #teamA
-        icon tech:fastify
-        technology 'fastify'
-        description 'Provides access to cart data.'
-        link https://github.com/likec4/template 'Repository'
-        metadata {
-          npm '@boutique/cart-api'
-          version: '1.0.0'
+          mainFunction = component "main()" { description "Main application function - orchestrates bot startup" }
+          setupLogging = component "setup_logging()" { description "Configure application logging with file and console handlers" }
+          signalHandlers = component "signal_handlers()" { description "Handle SIGINT and SIGTERM for graceful shutdown" }
+          eventLoopSetup = component "setup_event_loop()" { description "Configure Windows ProactorEventLoop for async operations" }
         }
       }
 
-      cache = component 'Cart Cache' {
-        #deprecated
-        icon tech:redis
-        technology 'Redis'
-        description 'Stores cart data.'
-      }
+      botCore = container "Bot Core" {
+        description "Main bot coordination logic"
+        technology "Python, JobMonitoringBot class"
 
-      api -> cache 'gets cart data' #deprecated
-      api -> catalogue 'gets product data'
-      api -> actionLog 'sends activity data' #v2 #next
-    }
+        botModule = component "bot.py" {
+          description "Core bot implementation"
 
-    actionLog = service 'Action Log Service' {
-      icon tech:go
-      description 'Manages user activity and search history.'
-    }
+          jobMonitoringBotClass = component "JobMonitoringBot" {
+            description "Main bot coordination class"
 
-    payments = service 'Payment Service' {
-      icon tech:scala
-      description 'Charges the given credit card info with the given amount and returns a transaction ID.'
-
-      processor = component 'Payment Processor' {
-        description 'Charges the given credit card info with the given amount and returns a transaction ID.'
-        -> payment-gateway 'processes payments' {
-          navigateTo order-fulfillment
+            initBot = component "__init__()" { description "Initialize bot with TelegramService, BotHandler, settings" }
+            startMonitoring = component "start_monitoring()" { description "Start the monitoring process - calls telegram service" }
+            stopBot = component "stop()" { description "Gracefully stop bot and close connections" }
+            handleSignal = component "_handle_signal()" { description "Handle shutdown signals and cleanup" }
+            setupHandlers = component "_setup_handlers()" { description "Configure telegram command and message handlers" }
+          }
         }
-        -> db.orders 'updates order status'
-      }
-
-      currency = component 'Currency Service' {
-        description 'Converts one money amount to another currency.'
       }
     }
 
-    shipping = service 'Shipping Service' {
-      icon tech:net
-      description 'Gives shipping cost estimates based on the shopping cart. Ships items to the given address.'
+    servicesLayer = layer "Services Layer" {
+      description "Core business logic services"
 
-      -> db.orders 'updates shipping data'
+      services = container "Services" {
+        description "Business logic service classes"
+        technology "Python services"
+
+        telegramService = worker "Telegram Service" {
+          description "Handles all Telegram operations"
+          technology "Telethon TelegramService class"
+
+          telegramServiceClass = component "TelegramService" {
+            description "Main service class"
+
+            initTelegram = component "__init__()" { description "Initialize Telegram client with API credentials" }
+            startMonitoringTelegram = component "start_monitoring()" { description "Start monitoring specified channels for new messages" }
+            processMessage = component "process_new_message()" { description "Process incoming messages - filter and forward if needed" }
+            forwardMessage = component "forward_message()" { description "Forward filtered messages to target chat" }
+            getStats = component "get_statistics()" { description "Retrieve bot operational statistics" }
+            stopTelegram = component "stop()" { description "Stop telegram client and disconnect" }
+          }
+        }
+
+        messageProcessor = worker "Message Processor" {
+          description "Message filtering and validation"
+          technology "MessageProcessor class"
+
+          messageProcessorClass = component "MessageProcessor" {
+            description "Static filtering logic"
+
+            containsKeywords = component "contains_keywords()" { description "Check if message contains required keywords (python, developer, etc.)" }
+            containsExclusions = component "contains_exclusion_words()" { description "Check if message contains exclusion words (senior, lead, etc.)" }
+            shouldForward = component "should_forward_message()" { description "Main filtering logic - combines keyword and exclusion checks" }
+            extractJobInfo = component "extract_job_info()" { description "Extract structured job information from message text" }
+            validateMessage = component "validate_message_format()" { description "Validate message format and content quality" }
+          }
+        }
+
+        botHandler = worker "Bot Handler" {
+          description "User command processing"
+          technology "BotHandler class"
+
+          botHandlerClass = component "BotHandler" {
+            description "Command handler implementation"
+
+            initHandler = component "__init__()" { description "Initialize handler with persistent storage reference" }
+            startCommand = component "handle_start_command()" { description "Handle /start command - welcome message and instructions" }
+            statusCommand = component "handle_status_command()" { description "Handle /status command - show bot operational status" }
+            statsCommand = component "handle_stats_command()" { description "Handle /stats command - detailed statistics and metrics" }
+            helpCommand = component "handle_help_command()" { description "Handle /help command - list available commands" }
+            updateStats = component "update_statistics()" { description "Update internal statistics counters" }
+            formatStats = component "format_statistics()" { description "Format statistics for user display" }
+          }
+        }
+
+        persistentStorage = worker "Persistent Storage" {
+          description "Data persistence and retrieval"
+          technology "JSON file storage"
+
+          persistentStorageClass = component "PersistentStorage" {
+            description "File-based data management"
+
+            initStorage = component "__init__()" { description "Initialize with file paths for data and forwarded messages" }
+            loadData = component "load_data()" { description "Load data from JSON files with error handling" }
+            saveData = component "save_data()" { description "Save data to JSON files with atomic write operations" }
+            isForwarded = component "is_message_forwarded()" { description "Check if message ID was already forwarded (prevent duplicates)" }
+            addForwarded = component "add_forwarded_message()" { description "Record newly forwarded message with timestamp" }
+            cleanupOld = component "cleanup_old_entries()" { description "Remove forwarded message entries older than 7 days" }
+            getForwardedCount = component "get_forwarded_count()" { description "Get count of messages forwarded in time period" }
+            exportData = component "export_data()" { description "Export data for backup or analysis" }
+          }
+        }
+      }
     }
 
-    catalogue = service 'Product Catalogue Service' {
-      icon tech:fast-api
-      description 'Provides a list of products and ability to search products and get individual products.'
-      -> db.products 'gets products'
+    handlersLayer = layer "Handlers Layer" {
+      description "User interaction layer"
+
+      handlers = container "Command Handlers" {
+        description "User interaction layer"
+        technology "python-telegram-bot handlers"
+
+        commandsHandler = worker "Commands Handler" {
+          description "Command processing interface"
+          technology "Commands module"
+
+          commandsModule = component "commands.py" {
+            description "Command handler implementations"
+
+            startHandler = component "start_command_handler()" { description "Handler for /start - delegates to BotHandler.handle_start_command" }
+            statusHandler = component "status_command_handler()" { description "Handler for /status - delegates to BotHandler.handle_status_command" }
+            statsHandler = component "stats_command_handler()" { description "Handler for /stats - delegates to BotHandler.handle_stats_command" }
+            helpHandler = component "help_command_handler()" { description "Handler for /help - delegates to BotHandler.handle_help_command" }
+            errorHandler = component "error_handler()" { description "Global error handler for command processing" }
+          }
+        }
+
+        messageHandler = worker "Message Handler" {
+          description "Message processing interface"
+          technology "Messages module"
+
+          messagesModule = component "messages.py" {
+            description "Message processing implementations"
+
+            handleMessage = component "handle_message()" { description "Main message handler - routes to telegram service" }
+            handleForwarding = component "handle_forwarding()" { description "Process message forwarding with validation" }
+            handlePrivateMessage = component "handle_private_message()" { description "Handle direct messages to bot" }
+            handleGroupMessage = component "handle_group_message()" { description "Handle messages in group chats" }
+          }
+        }
+      }
     }
 
-    frontend = webapp 'Frontend' {
-      icon tech:vue
-      technology 'VUE SPA'
-      description 'Provides access to boutique services.'
+    configurationLayer = layer "Configuration Layer" {
+      description "Settings and environment management"
 
-      -> actionLog 'sends user activity data'
+      configuration = container "Configuration" {
+        description "Settings and environment management"
+        technology "Settings module"
 
-      catalogue = component 'Product Catalogue' {
-        icon tech:vue
-        technology 'VUE single-page application'
-        description 'Displays products and allows users to search and view individual products.'
+        settingsModule = component "Settings Module" {
+          description "Configuration management"
+          technology "Python dataclass"
+
+          settingsClass = component "Settings" {
+            description "Main configuration class"
+
+            telegramConfig = component "telegram_config" { description "API ID, API Hash, Bot Token, Phone Number" }
+            monitoringConfig = component "monitoring_config" { description "Source channels, target chat, monitoring intervals" }
+            keywordsConfig = component "keywords_config" { description "Required keywords, exclusion words, filtering rules" }
+            loggingConfig = component "logging_config" { description "Log levels, file paths, rotation settings" }
+            storageConfig = component "storage_config" { description "Data file paths, backup settings, cleanup intervals" }
+            validateSettings = component "validate_settings()" { description "Validate all configuration values are present and valid" }
+            loadFromEnv = component "load_from_environment()" { description "Load settings from environment variables" }
+          }
+        }
       }
-
-      checkout = component 'Checkout' {
-        icon tech:vue
-        technology 'VUE single-page application'
-        description 'Allows users to review their cart, enter shipping information, and complete the purchase.'
-      }
-
-      profile = component 'User Profile' {
-        icon tech:vue
-        technology 'VUE single-page application'
-        description 'Displays user information and order history.'
-      }
-
-      -> cart 'gets cart data'
-      catalogue -> boutique.catalogue 'gets product data'
-      catalogue -> cart.api 'puts items in cart'
-      checkout -> payments.currency 'gets exchange rates'
-      checkout -> cart.api 'gets cart data'
-      checkout -> boutique.checkout 'sends checkout information' {
-        navigateTo place-order
-        link https://github.com/likec4/template 'Repository'
-      }
-      checkout -> shipping 'gets shipping cost'
     }
 
-    db = database 'Boutique Database' {
-      icon tech:postgresql
-      technology 'PostgreSQL'
-      description 'Stores all product, order, and user data.'
+    utilitiesLayer = layer "Utilities Layer" {
+      description "Helper functions and common utilities"
 
-      products = db_table 'Products' {
-        description 'Stores all product data.'
+      utilities = container "Utilities" {
+        description "Helper functions and common utilities"
+        technology "Python utility modules"
+
+        helpersModule = component "Helpers" {
+          description "Common utility functions"
+
+          formatUtils = component "format_message()" { description "Format messages for display" }
+          timeUtils = component "format_timestamp()" { description "Format timestamps for logging and display" }
+          validationUtils = component "validate_channel_name()" { description "Validate Telegram channel names" }
+          textUtils = component "clean_text()" { description "Clean and normalize text content" }
+        }
+
+        loggingModule = component "Logging" {
+          description "Logging configuration and utilities"
+
+          setupLogger = component "setup_logger()" { description "Configure loggers with file and console handlers" }
+          logMessage = component "log_message_event()" { description "Log message processing events" }
+          logError = component "log_error_with_context()" { description "Log errors with full context information" }
+        }
       }
+    }
 
-      orders = db_table 'Orders' {
-        description 'Stores all order data.'
+    dataLayer = layer "Data Storage Layer" {
+      description "File-based persistence layer"
+
+      dataStorage = container "Data Storage" {
+        description "File-based persistence layer"
+        technology "JSON files"
+
+        forwardedMessages = component "Forwarded Messages Store" {
+          description "forwarded_messages.json - tracks all forwarded message IDs with timestamps"
+          technology "JSON file with message_id, timestamp, channel_name"
+        }
+        botState = component "Bot State Store" {
+          description "bot_state.json - maintains operational state and statistics"
+          technology "JSON file with counters, last_run, error_counts"
+        }
+        configCache = component "Config Cache" {
+          description "Cached configuration data for performance"
+          technology "In-memory cache with file backup"
+        }
+        logs = component "Log Files" {
+          description "Application and error logs"
+          technology "Rotating log files with timestamps"
+        }
       }
-
-      users = db_table 'Users' {
-        description 'Stores all user data.'
-      }
-
-      orders -> products
-      orders -> users
     }
   }
 
-  payment-gateway = external-system 'Payment Gateway' {
-    description '
-      Platform to process online payments
-    '
+  // === RELATIONSHIPS ===
+  
+  // External relationships
+  botUser -> jobMonitoringBot "Uses bot commands"
+  jobMonitoringBot -> telegramPlatform "Connects via API"
+  jobMonitoringBot -> sourceChannels "Monitors for new messages"
+  jobMonitoringBot -> targetChat "Forwards filtered messages"
+  
+  // Method-level relationships - Main application flow
+  mainFunction -> initBot "Initializes bot instance"
+  initBot -> startMonitoring "Starts monitoring process"
+  startMonitoring -> startMonitoringTelegram "Delegates to telegram service"
+  
+  // Telegram service method relationships
+  startMonitoringTelegram -> processMessage "Processes each new message"
+  processMessage -> shouldForward "Checks if message should be forwarded"
+  shouldForward -> containsKeywords "Validates required keywords"
+  shouldForward -> containsExclusions "Checks exclusion words"
+  processMessage -> isForwarded "Checks if already forwarded"
+  processMessage -> forwardMessage "Forwards approved messages"
+  forwardMessage -> addForwarded "Records forwarded message"
+  
+  // Message processing method relationships
+  processMessage -> extractJobInfo "Extracts job information"
+  extractJobInfo -> validateMessage "Validates extracted data"
+  processMessage -> cleanupOld "Cleans up old entries"
+  
+  // Command handling method relationships
+  startHandler -> startCommand "Delegates to bot handler"
+  statusHandler -> statusCommand "Delegates to bot handler"
+  statsHandler -> statsCommand "Delegates to bot handler"
+  helpHandler -> helpCommand "Delegates to bot handler"
+  
+  // Bot handler method relationships
+  startCommand -> updateStats "Updates usage statistics"
+  statusCommand -> getStats "Retrieves current statistics"
+  statsCommand -> getForwardedCount "Gets forwarded message count"
+  statsCommand -> formatStats "Formats statistics for display"
+  updateStats -> saveData "Persists updated statistics"
+  
+  // Storage method relationships
+  isForwarded -> loadData "Loads forwarded messages data"
+  addForwarded -> saveData "Saves new forwarded entry"
+  getForwardedCount -> loadData "Loads data for counting"
+  cleanupOld -> saveData "Saves after cleanup"
+  getStats -> loadData "Loads statistics data"
+  
+  // Message handler method relationships
+  handleMessage -> processMessage "Routes to telegram service"
+  handleForwarding -> forwardMessage "Calls forwarding logic"
+  handlePrivateMessage -> processMessage "Processes private messages"
+  handleGroupMessage -> processMessage "Processes group messages"
+  
+  // Configuration method relationships
+  validateSettings -> loadFromEnv "Validates environment variables"
+  initTelegram -> telegramConfig "Uses telegram configuration"
+  startMonitoringTelegram -> monitoringConfig "Uses monitoring settings"
+  shouldForward -> keywordsConfig "Uses keyword filtering rules"
+  
+  // Utility method relationships
+  formatStats -> formatUtils "Uses formatting utilities"
+  addForwarded -> timeUtils "Uses timestamp utilities"
+  processMessage -> logMessage "Logs message events"
+  errorHandler -> logError "Logs command errors"
+  setupLogging -> setupLogger "Configures application logging"
+  
+  // Signal handling relationships
+  signalHandlers -> handleSignal "Handles shutdown signals"
+  handleSignal -> stopBot "Initiates graceful shutdown"
+  stopBot -> stopTelegram "Stops telegram client"
+}
+
+views {
+  // ============================================================================
+  // LEVEL 0: SYSTEM CONTEXT - Highest level overview
+  // ============================================================================
+  
+  view index {
+    title "L0: System Context - Job Monitoring Bot"
+    description "System context showing external actors and the main bot system. Click the 'Job Monitoring Bot' element to drill down to L1 system architecture."
+    
+    include botUser, telegramPlatform, sourceChannels, targetChat, jobMonitoringBot
+    
+    style jobMonitoringBot {
+      color primary
+      opacity 80%
+    }
+    
   }
 
-  email-provider = external-system 'Email Provider' {
-    description '
-      3rd Party Platform to send transactional emails
-    '
+  // Navigation helper view
+  view navigation {
+    title "Navigation Guide - Drill-Down Structure"
+    description "Complete navigation structure showing all available drill-down paths"
+    
+    // This view shows the navigation structure without actual components
+    // Users can reference this to understand the hierarchy
   }
 
+  // ============================================================================
+  // LEVEL 1: SYSTEM OVERVIEW - Main system with layers
+  // ============================================================================
+
+  // Scoped view of jobMonitoringBot - this enables drill-down from the L0 index view
+  view jobMonitoringBot of jobMonitoringBot {
+    title "L1: System Architecture - Architectural Layers"
+    description "High-level architectural layers within the Job Monitoring Bot system. Click any layer to drill down to L2 details."
+    
+    include *
+    
+    style jobMonitoringBot.* {
+      color primary
+      opacity 60%
+    }
+    
+  }
+
+  // ============================================================================
+  // LEVEL 2: LAYER DETAILS - Individual layer drill-downs
+  // ============================================================================
+  
+  view applicationLayer of jobMonitoringBot.applicationLayer {
+    title "L2: Application Layer - Entry Point & Orchestration"
+    description "Main application components and bot coordination logic. Click 'mainApp' or 'botCore' to drill down to L3 details."
+    
+    include *
+    
+    style mainApp, botCore {
+      color primary
+      opacity 80%
+    }
+    
+  }
+
+  view servicesLayer of jobMonitoringBot.servicesLayer {
+    title "L2: Services Layer - Core Business Logic"
+    description "All service components handling telegram operations, message processing, and data management. Click 'services' to see L3 workers, or click individual workers for L4 details."
+    
+    include *
+    
+    style services {
+      color primary
+      opacity 80%
+    }
+    
+    style telegramService, messageProcessor, botHandler, persistentStorage {
+      color green
+      opacity 70%
+    }
+    
+  }
+
+  view handlersLayer of jobMonitoringBot.handlersLayer {
+    title "L2: Handlers Layer - User Interaction"
+    description "Command and message handlers for user interactions. Click 'handlers' to see L3 workers, or click individual workers for L4 details."
+    
+    include *
+    
+    style handlers {
+      color primary
+      opacity 80%
+    }
+    
+    style commandsHandler, messageHandler {
+      color blue
+      opacity 70%
+    }
+    
+  }
+
+  view configurationLayer of jobMonitoringBot.configurationLayer {
+    title "L2: Configuration Layer - Settings Management"
+    description "Configuration and settings management components"
+    
+    include *
+    
+    style configuration {
+      color muted
+      opacity 80%
+    }
+    
+  }
+
+  view utilitiesLayer of jobMonitoringBot.utilitiesLayer {
+    title "L2: Utilities Layer - Helper Functions"
+    description "Common utilities, helpers, and logging components"
+    
+    include *
+    
+    style utilities {
+      color muted
+      opacity 80%
+    }
+    
+  }
+
+  view dataLayer of jobMonitoringBot.dataLayer {
+    title "L2: Data Storage Layer - Persistence"
+    description "File-based data storage and persistence components"
+    
+    include *
+    
+    style dataStorage {
+      color muted
+      opacity 80%
+    }
+    
+  }
+
+  // ============================================================================
+  // LEVEL 3: CONTAINER DETAILS - Individual container drill-downs
+  // ============================================================================
+  
+  view mainApp of jobMonitoringBot.applicationLayer.mainApp {
+    title "L3: Main Application Container - Entry Point Details"
+    description "Application entry point and main module with all functions"
+    
+    include *
+    
+    style jobMonitoringBot.applicationLayer.mainApp.* {
+      color primary
+      opacity 90%
+    }
+    
+  }
+
+  view botCore of jobMonitoringBot.applicationLayer.botCore {
+    title "L3: Bot Core Container - Coordination Logic"
+    description "Core bot coordination and JobMonitoringBot class methods"
+    
+    include *
+    
+    style jobMonitoringBot.applicationLayer.botCore.* {
+      color primary
+      opacity 90%
+    }
+    
+  }
+
+  view services of jobMonitoringBot.servicesLayer.services {
+    title "L3: Services Container - Business Logic Workers"
+    description "All business logic services with worker components"
+    
+    include *
+    
+    style telegramService, messageProcessor, botHandler, persistentStorage {
+      color green
+      opacity 80%
+    }
+    
+  }
+
+  view handlers of jobMonitoringBot.handlersLayer.handlers {
+    title "L3: Handlers Container - User Interaction Workers"
+    description "Command and message handlers with worker components"
+    
+    include *
+    
+    style commandsHandler, messageHandler {
+      color blue
+      opacity 80%
+    }
+    
+  }
+
+  view configuration of jobMonitoringBot.configurationLayer.configuration {
+    title "L3: Configuration Container - Settings Management"
+    description "Settings and configuration management components"
+    
+    include *
+    
+    style jobMonitoringBot.configurationLayer.configuration.* {
+      color muted
+      opacity 90%
+    }
+    
+  }
+
+  view utilities of jobMonitoringBot.utilitiesLayer.utilities {
+    title "L3: Utilities Container - Helper Functions"
+    description "Helper functions and common utilities components"
+    
+    include *
+    
+    style jobMonitoringBot.utilitiesLayer.utilities.* {
+      color muted
+      opacity 90%
+    }
+    
+  }
+
+  view dataStorage of jobMonitoringBot.dataLayer.dataStorage {
+    title "L3: Data Storage Container - Persistence Components"
+    description "File-based data storage and persistence components"
+    
+    include *
+    
+    style jobMonitoringBot.dataLayer.dataStorage.* {
+      color muted
+      opacity 90%
+    }
+    
+  }
+
+  // ============================================================================
+  // LEVEL 4: WORKER/COMPONENT DETAILS - Deepest level drill-downs
+  // ============================================================================
+  
+  view telegramService of telegramService {
+    title "L4: Telegram Service Worker - Method Implementation"
+    description "TelegramService worker with all telegram operation methods"
+    
+    include *
+    
+    style jobMonitoringBot.servicesLayer.services.telegramService.* {
+      color green
+      opacity 95%
+    }
+    
+  }
+
+  view messageProcessor of messageProcessor {
+    title "L4: Message Processor Worker - Filtering Logic"
+    description "MessageProcessor worker with filtering and validation methods"
+    
+    include *
+    
+    style jobMonitoringBot.servicesLayer.services.messageProcessor.* {
+      color green
+      opacity 95%
+    }
+    
+  }
+
+  view botHandler of botHandler {
+    title "L4: Bot Handler Worker - Command Processing"
+    description "BotHandler worker with command processing methods"
+    
+    include *
+    
+    style jobMonitoringBot.servicesLayer.services.botHandler.* {
+      color green
+      opacity 95%
+    }
+    
+  }
+
+  view persistentStorage of persistentStorage {
+    title "L4: Persistent Storage Worker - Data Management"
+    description "PersistentStorage worker with data management methods"
+    
+    include *
+    
+    style jobMonitoringBot.servicesLayer.services.persistentStorage.* {
+      color green
+      opacity 95%
+    }
+    
+  }
+
+  view commandsHandler of commandsHandler {
+    title "L4: Commands Handler Worker - Command Interface"
+    description "Commands handler worker with user command processing functions"
+    
+    include *
+    
+    style jobMonitoringBot.handlersLayer.handlers.commandsHandler.* {
+      color blue
+      opacity 95%
+    }
+    
+  }
+
+  view messageHandler of messageHandler {
+    title "L4: Message Handler Worker - Message Routing"
+    description "Message handler worker with message routing functions"
+    
+    include *
+    
+    style jobMonitoringBot.handlersLayer.handlers.messageHandler.* {
+      color blue
+      opacity 95%
+    }
+    
+  }
+
+  // ============================================================================
+  // SPECIAL VIEWS: Cross-cutting concerns and data flow
+  // ============================================================================
+  
+  view dataFlow {
+    title "Data Flow - Message Processing Pipeline"
+    description "Cross-layer view showing the complete message processing data flow"
+    
+    include botUser, sourceChannels, targetChat
+    include processMessage, shouldForward, containsKeywords, containsExclusions
+    include isForwarded, forwardMessage, addForwarded
+    include extractJobInfo, validateMessage, cleanupOld
+    
+    autoLayout LeftRight
+  }
+  
+  view commandFlow {
+    title "Command Flow - User Interaction Pipeline"
+    description "Cross-layer view showing the complete user command processing flow"
+    
+    include botUser
+    include startHandler, statusHandler, statsHandler, helpHandler
+    include startCommand, statusCommand, statsCommand, helpCommand
+    include updateStats, getStats, formatStats
+    
+    autoLayout LeftRight
+  }
+
+  // ============================================================================
+  // DYNAMIC VIEWS: Comprehensive Use Case
+  // ============================================================================
+  
+  dynamic view comprehensiveJobMonitoringFlow {
+    title "Complete Job Monitoring Bot Workflow"
+    description "End-to-end scenario showing bot startup, message processing, user interaction, and error handling"
+    
+    // === PHASE 1: BOT STARTUP ===
+    jobMonitoringBot -> telegramPlatform "1. Initialize connection" {
+      notes "🚀 Bot starts up and establishes connection to Telegram API with credentials"
+    }
+    
+    jobMonitoringBot -> jobMonitoringBot "2. Load configuration" {
+      notes "⚙️ Loads settings, keywords, channels list, and persistent data from storage"
+    }
+    
+    jobMonitoringBot -> sourceChannels "3. Begin monitoring" {
+      notes "👁️ Starts monitoring cyithr, cyprusithr, and relocation_vacancies channels"
+    }
+    
+    // === PHASE 2: MESSAGE PROCESSING ===
+    sourceChannels -> jobMonitoringBot "4. New job post detected" {
+      notes "� A new Python developer job posting appears in one of the monitored channels"
+    }
+    
+    jobMonitoringBot -> jobMonitoringBot "5. Apply filtering rules" {
+      notes "🔍 Checks for required keywords (python, developer) and exclusions (senior, lead, manager)"
+    }
+    
+    jobMonitoringBot -> jobMonitoringBot "6. Validate and check duplicates" {
+      notes "✅ Validates message format and checks if already forwarded to prevent duplicates"
+    }
+    
+    jobMonitoringBot -> targetChat "7. Forward approved message" {
+      notes "📤 Forwards the filtered job posting to the target chat for relevant opportunities"
+    }
+    
+    jobMonitoringBot -> jobMonitoringBot "8. Record forwarding" {
+      notes "💾 Saves message ID and timestamp to persistent storage for duplicate prevention"
+    }
+    
+    // === PHASE 3: USER INTERACTION ===
+    botUser -> jobMonitoringBot "9. User checks status" {
+      notes "👤 User sends /status command to verify bot is working and check statistics"
+    }
+    
+    jobMonitoringBot -> jobMonitoringBot "10. Process command" {
+      notes "⚙️ Bot processes status request, retrieves statistics from storage"
+    }
+    
+    jobMonitoringBot -> botUser "11. Return status report" {
+      notes "� Sends detailed status: uptime, messages processed, forwards count, last activity"
+    }
+    
+    // === PHASE 4: ERROR HANDLING & RECOVERY ===
+    sourceChannels -> jobMonitoringBot "12. Connection issue occurs" {
+      notes "❌ Network interruption or API rate limit causes temporary connection loss"
+    }
+    
+    jobMonitoringBot -> jobMonitoringBot "13. Error detection & logging" {
+      notes "🛡️ Bot detects error, logs details with context, maintains operational state"
+    }
+    
+    jobMonitoringBot -> telegramPlatform "14. Automatic reconnection" {
+      notes "� Bot attempts to reestablish connection using exponential backoff strategy"
+    }
+    
+    jobMonitoringBot -> sourceChannels "15. Resume monitoring" {
+      notes "▶️ Successfully reconnects and continues monitoring without data loss"
+    }
+    
+    // === PHASE 5: MAINTENANCE ===
+    jobMonitoringBot -> jobMonitoringBot "16. Cleanup old data" {
+      notes "🧹 Automatically removes forwarded message records older than 7 days"
+    }
+    
+    botUser -> jobMonitoringBot "17. User requests statistics" {
+      notes "📈 User sends /stats command to get detailed performance metrics"
+    }
+    
+    jobMonitoringBot -> botUser "18. Provide comprehensive stats" {
+      notes "📋 Returns: total messages processed, forwards today/week, error counts, uptime"
+    }
+    
+    // === STYLING FOR CLARITY ===
+    style jobMonitoringBot {
+      color primary
+    }
+    
+    style sourceChannels, targetChat {
+      color green
+    }
+    
+    style telegramPlatform {
+      color blue
+    }
+    
+    style botUser {
+      color muted
+    }
+  }
 }
