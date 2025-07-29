@@ -390,8 +390,6 @@ views {
     
     include botUser, telegramPlatform, sourceChannels, targetChat, jobMonitoringBot
     
-    autoLayout TopBottom
-    
     style jobMonitoringBot {
       color primary
       opacity 80%
