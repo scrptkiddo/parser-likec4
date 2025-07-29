@@ -706,7 +706,7 @@ views {
     include isForwarded, forwardMessage, addForwarded
     include extractJobInfo, validateMessage, cleanupOld
     
-    autoLayout LeftRight
+    autoLayout TopBottom
   }
   
   view commandFlow {
@@ -718,7 +718,7 @@ views {
     include startCommand, statusCommand, statsCommand, helpCommand
     include updateStats, getStats, formatStats
     
-    autoLayout LeftRight
+    autoLayout TopBottom
   }
 
   // ============================================================================
