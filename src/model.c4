@@ -417,8 +417,6 @@ views {
     
     include *
     
-    autoLayout TopBottom
-    
     style jobMonitoringBot.* {
       color primary
       opacity 60%
@@ -707,8 +705,6 @@ views {
     include processMessage, shouldForward, containsKeywords, containsExclusions
     include isForwarded, forwardMessage, addForwarded
     include extractJobInfo, validateMessage, cleanupOld
-    
-    autoLayout TopBottom
   }
   
   view commandFlow {
@@ -719,8 +715,6 @@ views {
     include startHandler, statusHandler, statsHandler, helpHandler
     include startCommand, statusCommand, statsCommand, helpCommand
     include updateStats, getStats, formatStats
-    
-    autoLayout TopBottom
   }
 
   // ============================================================================
