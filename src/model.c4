@@ -417,6 +417,8 @@ views {
     
     include *
     
+    autoLayout TopBottom
+    
     style jobMonitoringBot.* {
       color primary
       opacity 60%
