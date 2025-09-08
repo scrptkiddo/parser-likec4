@@ -57,9 +57,14 @@ model {
   }
 
   // External Systems
-  telegramPlatform = external "Telegram Platform" {
-    description "External Telegram messaging platform and API"
-    technology "Telegram API"
+  telethonApi = external "Telegram Client API" {
+    description "Telegram user client API used via Telethon"
+    technology "Telethon (MTProto)"
+  }
+
+  botApi = external "Telegram Bot API" {
+    description "Telegram Bot API used for command handlers"
+    technology "python-telegram-bot"
   }
 
   sourceChannels = external "Source Channels" {
@@ -212,19 +217,7 @@ model {
           }
         }
 
-        messageHandler = worker "Message Handler" {
-          description "Message processing interface"
-          technology "Messages module"
-
-          messagesModule = component "messages.py" {
-            description "Message processing implementations"
-
-            handleMessage = component "handle_message()" { description "Main message handler - routes to telegram service" }
-            handleForwarding = component "handle_forwarding()" { description "Process message forwarding with validation" }
-            handlePrivateMessage = component "handle_private_message()" { description "Handle direct messages to bot" }
-            handleGroupMessage = component "handle_group_message()" { description "Handle messages in group chats" }
-          }
-        }
+  // Note: No standalone message handler module in the codebase; only command handlers exist
       }
     }
 
@@ -277,6 +270,11 @@ model {
           logMessage = component "log_message_event()" { description "Log message processing events" }
           logError = component "log_error_with_context()" { description "Log errors with full context information" }
         }
+
+        healthServer = component "Health Server" {
+          description "Lightweight HTTP health endpoint for liveness checks"
+          technology "Async HTTP server"
+        }
       }
     }
 
@@ -303,6 +301,14 @@ model {
           description "Application and error logs"
           technology "Rotating log files with timestamps"
         }
+        lockFile = component "Lock File" {
+          description "bot.lock - prevents multiple instances"
+          technology "File sentinel"
+        }
+        stopSignal = component "Stop Signal" {
+          description "bot_stop.signal - graceful shutdown trigger"
+          technology "File sentinel"
+        }
       }
     }
   }
@@ -311,9 +317,14 @@ model {
   
   // External relationships
   botUser -> jobMonitoringBot "Uses bot commands"
-  jobMonitoringBot -> telegramPlatform "Connects via API"
+  jobMonitoringBot -> telethonApi "Connects as user via Telethon"
+  jobMonitoringBot -> botApi "Exposes bot commands"
+  telegramService -> telethonApi "Reads channels, forwards, pins"
+  botHandler -> botApi "Registers and handles commands"
   jobMonitoringBot -> sourceChannels "Monitors for new messages"
   jobMonitoringBot -> targetChat "Forwards filtered messages"
+  telegramService -> sourceChannels "Monitors channels"
+  telegramService -> targetChat "Forwards messages"
   
   // Method-level relationships - Main application flow
   mainFunction -> initBot "Initializes bot instance"
@@ -354,11 +365,7 @@ model {
   cleanupOld -> saveData "Saves after cleanup"
   getStats -> loadData "Loads statistics data"
   
-  // Message handler method relationships
-  handleMessage -> processMessage "Routes to telegram service"
-  handleForwarding -> forwardMessage "Calls forwarding logic"
-  handlePrivateMessage -> processMessage "Processes private messages"
-  handleGroupMessage -> processMessage "Processes group messages"
+  // Message handler functions removed (no messages.py in the project)
   
   // Configuration method relationships
   validateSettings -> loadFromEnv "Validates environment variables"
@@ -372,6 +379,11 @@ model {
   processMessage -> logMessage "Logs message events"
   errorHandler -> logError "Logs command errors"
   setupLogging -> setupLogger "Configures application logging"
+  
+  // Health and sentinel relationships
+  jobMonitoringBotClass -> healthServer "Exposes liveness endpoint"
+  jobMonitoringBotClass -> lockFile "Creates on startup"
+  startMonitoringTelegram -> stopSignal "Checks for stop signal"
   
   // Signal handling relationships
   signalHandlers -> handleSignal "Handles shutdown signals"
@@ -388,7 +400,7 @@ views {
     title "L0: System Context - Job Monitoring Bot"
     description "System context showing external actors and the main bot system. Click the 'Job Monitoring Bot' element to drill down to L1 system architecture."
     
-    include botUser, telegramPlatform, sourceChannels, targetChat, jobMonitoringBot
+  include botUser, telethonApi, botApi, sourceChannels, targetChat, jobMonitoringBot
     
     style jobMonitoringBot {
       color primary
@@ -470,7 +482,7 @@ views {
       opacity 80%
     }
     
-    style commandsHandler, messageHandler {
+  style commandsHandler {
       color blue
       opacity 70%
     }
@@ -565,7 +577,7 @@ views {
     
     include *
     
-    style commandsHandler, messageHandler {
+  style commandsHandler {
       color blue
       opacity 80%
     }
@@ -680,23 +692,19 @@ views {
     
   }
 
-  view messageHandler of messageHandler {
-    title "L4: Message Handler Worker - Message Routing"
-    description "Message handler worker with message routing functions"
-    
-    include *
-    
-    style jobMonitoringBot.handlersLayer.handlers.messageHandler.* {
-      color blue
-      opacity 95%
-    }
-    
-  }
-
   // ============================================================================
   // SPECIAL VIEWS: Cross-cutting concerns and data flow
   // ============================================================================
   
+  view integrations {
+    title "Integrations - Telegram APIs and Connectors"
+    description "Shows how internal services connect to Telegram Client API and Bot API, plus channel/target chat. Note: bot.lock prevents double start; bot_stop.signal triggers graceful shutdown; Health Server exposes a liveness endpoint."
+    include jobMonitoringBot, telethonApi, botApi, telegramService, botHandler, sourceChannels, targetChat, healthServer, lockFile, stopSignal
+    style telethonApi, botApi { color blue }
+    style telegramService, botHandler { color green }
+    style healthServer, lockFile, stopSignal { color muted }
+  }
+
   view dataFlow {
     title "Data Flow - Message Processing Pipeline"
     description "Cross-layer view showing the complete message processing data flow"
@@ -711,7 +719,7 @@ views {
     title "Command Flow - User Interaction Pipeline"
     description "Cross-layer view showing the complete user command processing flow"
     
-    include botUser
+  include botUser, jobMonitoringBot, botApi
     include startHandler, statusHandler, statsHandler, helpHandler
     include startCommand, statusCommand, statsCommand, helpCommand
     include updateStats, getStats, formatStats
@@ -726,7 +734,7 @@ views {
     description "End-to-end scenario showing bot startup, message processing, user interaction, and error handling"
     
     // === PHASE 1: BOT STARTUP ===
-    jobMonitoringBot -> telegramPlatform "1. Initialize connection" {
+  jobMonitoringBot -> telethonApi "1. Initialize connection" {
       notes "🚀 Bot starts up and establishes connection to Telegram API with credentials"
     }
     
@@ -781,7 +789,7 @@ views {
       notes "🛡️ Bot detects error, logs details with context, maintains operational state"
     }
     
-    jobMonitoringBot -> telegramPlatform "14. Automatic reconnection" {
+  jobMonitoringBot -> telethonApi "14. Automatic reconnection" {
       notes "� Bot attempts to reestablish connection using exponential backoff strategy"
     }
     
@@ -811,7 +819,7 @@ views {
       color green
     }
     
-    style telegramPlatform {
+  style telethonApi, botApi {
       color blue
     }
     
