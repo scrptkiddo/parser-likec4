@@ -30,23 +30,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v4
         
-      - name: Build
-        uses: likec4/actions@v1
-        with:
-          action: build
-          output: dist
-          path: src
-          # required if you don't set a custom domain for the repository
-          # https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages#types-of-github-pages-sites
-          base: ${{ steps.pages.outputs.base_path }}
-          # Force consistent LikeC4 version
-          likec4-version: latest
-          # Use the same layout engine as localhost (WASM instead of binary)
-          use-dot-bin: 'false'
+      - name: Install LikeC4
+        run: npm install -g likec4@latest
+        
+      - name: Debug environment
+        run: |
+          echo "Base path: ${{ steps.pages.outputs.base_path }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "LikeC4 version:"
+          likec4 --version
+          
+      - name: Build with LikeC4 CLI
+        run: |
+          likec4 build \
+            --path src \
+            --output dist \
+            --base "${{ steps.pages.outputs.base_path }}" \
+            --use-dot false \
+            --title "LikeC4 Architecture Diagrams"
+            
+      - name: List build output
+        run: |
+          echo "Build output:"
+          ls -la dist/
+          echo "Index.html content:"
+          head -20 dist/index.html
           
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
