@@ -1,18 +1,12 @@
 {
-  "name": "likec4-template",
-  "version": "0.0.1",
+  "name": "parser-likec4",
+  "version": "1.0.0",
   "private": true,
-  "description": "LikeC4 template",
+  "description": "LikeC4 Architecture Diagrams",
   "scripts": {
-    "start": "likec4 serve --path src",
-    "dev": "likec4 serve --path src",
-    "build": "likec4 build --path src -o ./dist",
-    "build:gh-pages": "likec4 build --path src -o ./dist --base ./",
-    "preview": "likec4 preview -o ./dist",
-    "generate:react": "likec4 generate react",
-    "export:png": "likec4 export png -o ./png"
-  },
-  "devDependencies": {
-    "likec4": "latest"
+    "start": "npx likec4@latest serve --path src",
+    "dev": "npx likec4@latest serve --path src",
+    "build": "npx likec4@latest build --path src -o ./dist",
+    "preview": "npx likec4@latest preview -o ./dist"
   }
 }
