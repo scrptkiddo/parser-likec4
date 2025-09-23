@@ -39,11 +39,14 @@ jobs:
         with:
           action: build
           output: dist
+          path: src
           # required if you don't set a custom domain for the repository
           # https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages#types-of-github-pages-sites
           base: ${{ steps.pages.outputs.base_path }}
-          # (optional) by default, the bundled version is used, which is faster due to skipping the installation
-          # likec4-version: latest
+          # Force consistent LikeC4 version
+          likec4-version: latest
+          # Use the same layout engine as localhost (WASM instead of binary)
+          use-dot-bin: 'false'
           
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
