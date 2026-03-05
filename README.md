@@ -1,19 +1,12 @@
-# LikeC4 Template
+# LikeC4 Telegram Bot
 
-This template is a simple example of how to use LikeC4.  
+Telegram bot architecture to deploy on GitHub Actions.  
 Contains:
 
 - LikeC4 sources ([`/src`](./src/))
 - Deploy to github pages ([`pages.yml`](./.github/workflows/pages.yml))
 
-Demo - [https://template.likec4.dev](https://template.likec4.dev/view/cloud)
-
-Try it online:
-
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/likec4/template?file=src%2Fmodel.c4&initialpath=%2Fview%2Findex)
-
-> StackBlitz does not support extensions, so do not expect validation, syntax highlighting and other features in likec4 files.  
-> Try this template online with [github.dev](https://github.dev/likec4/template/blob/main/src/model.c4) and install extension.
+Demo - [https://template.likec4.dev](https://template.likec4.dev)
 
 ## How-to
 
